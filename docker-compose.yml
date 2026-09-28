@@ -7,6 +7,11 @@ services:
   pg1:
     image: postgres:18
     container_name: pg1
+    depends_on:
+      pg2:
+        condition: service_healthy
+      pg3:
+        condition: service_healthy
     env_file: .env
     environment:
       POSTGRES_USER: ${POSTGRES_USER}

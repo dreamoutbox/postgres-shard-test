@@ -144,13 +144,13 @@ CREATE FOREIGN TABLE users_p1
 ### Phase 2: Shard Schema & Foreign Data Wrapper Integration
 - Goal: Install `postgres_fdw`, register foreign servers, configure user mappings, and initialize partition target tables on shards.
 - Tasks:
-  - [ ] Write initialization SQL script for shard nodes to create physical partition tables (`users_shard_1` on `pg2`, `users_shard_2` on `pg3`).
-  - [ ] Write coordinator initialization script on `pg1`:
+  - [x] Write initialization SQL script for shard nodes to create physical partition tables (`users_shard_1` on `pg2`, `users_shard_2` on `pg3`).
+  - [x] Write coordinator initialization script on `pg1`:
     - Enable `postgres_fdw`.
     - Create foreign servers `shard1_server` and `shard2_server` with network optimization options (`fetch_size '1000'`, `batch_size '1000'`).
     - Create user mappings for `postgres` user.
-  - [ ] Create root partitioned table `users` on `pg1` using hash partitioning (`PARTITION BY HASH (id)`).
-  - [ ] Bind foreign tables `users_p0` and `users_p1` to remote servers.
+  - [x] Create root partitioned table `users` on `pg1` using hash partitioning (`PARTITION BY HASH (id)`).
+  - [x] Bind foreign tables `users_p0` and `users_p1` to remote servers.
 - Done when: Coordinator schema inspection shows `users` partitioned table with `users_p0` and `users_p1` foreign partitions pointing to `pg2` and `pg3`.
 
 ### Phase 3: Sharding Verification Suite
