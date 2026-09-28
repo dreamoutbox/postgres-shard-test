@@ -136,6 +136,7 @@ CREATE FOREIGN TABLE users_p1
 │   ├── init-pg3.sh        # Creates users_shard_2 table on Shard 2
 │   ├── start.sh           # Starts the cluster (pg2/pg3 healthy -> pg1 coordinator)
 │   ├── stop.sh            # Stops cluster and wipes containers + volumes
+│   ├── seed.sh            # Inserts sample rows through coordinator
 │   ├── test-sharding.sh   # 13-check automated sharding test suite
 │   └── inspect.sh         # Real-time cluster inspection tool
 ├── docker-compose.yml
@@ -153,7 +154,15 @@ CREATE FOREIGN TABLE users_p1
 ./scripts/start.sh
 ```
 
-### 2. Run the automated verification suite
+### 2. Seed sample data
+
+```bash
+./scripts/seed.sh 10
+```
+
+Inserts 10 rows through the coordinator. You can run it multiple times with any desired row count (e.g. `./scripts/seed.sh 100`).
+
+### 3. Run the automated verification suite
 
 ```bash
 ./scripts/test-sharding.sh
