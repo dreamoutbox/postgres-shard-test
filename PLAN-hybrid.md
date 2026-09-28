@@ -41,13 +41,13 @@ A comprehensive plan to transform the cluster into a **3-Way Hybrid Sharding Arc
 ### Phase 1: Reconfigure Coordinator Schema for Hybrid Partitioning
 - Goal: Update `pg1` initialization schema to partition with `MODULUS 3`, creating a local physical table for partition 0 and foreign partitions for shards 1 and 2.
 - Tasks:
-  - [ ] Update `scripts/init-pg1.sh`:
+  - [x] Update `scripts/init-pg1.sh`:
     - Modify `users` table partitioning logic to use `MODULUS 3`.
     - Create `users_p0` as a local standard table: `CREATE TABLE users_p0 PARTITION OF users FOR VALUES WITH (MODULUS 3, REMAINDER 0)`.
     - Create `users_p1` as a foreign table on `shard1_server` for `REMAINDER 1`.
     - Create `users_p2` as a foreign table on `shard2_server` for `REMAINDER 2`.
-  - [ ] Test cluster boot (`./scripts/stop.sh && ./scripts/start.sh`).
-  - [ ] Inspect coordinator catalog: verify `users` has 1 local partition and 2 foreign partitions.
+  - [x] Test cluster boot (`./scripts/stop.sh && ./scripts/start.sh`).
+  - [x] Inspect coordinator catalog: verify `users` has 1 local partition and 2 foreign partitions.
 - Done when: `./scripts/stop.sh && ./scripts/start.sh` boots healthy; `\d+ users` on `pg1` shows `users_p0` (TABLE), `users_p1` (FOREIGN TABLE), and `users_p2` (FOREIGN TABLE).
 
 ### Phase 2: Update Automated Sharding Test Suite for 3-Way Hybrid Routing

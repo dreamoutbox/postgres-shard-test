@@ -50,16 +50,26 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$APP_DB" <<-SQL
         created_at TIMESTAMPTZ DEFAULT now()
     ) PARTITION BY HASH (id);
 
-    -- 5. Attach remote shards as partitions
-    CREATE FOREIGN TABLE IF NOT EXISTS users_p0
+    -- 5. Partitions (Hybrid: 1 Local on pg1, 2 Foreign on pg2 & pg3)
+    -- Partition 0: Stored LOCALLY on pg1 disk
+    CREATE TABLE IF NOT EXISTS users_p0
         PARTITION OF users
-        FOR VALUES WITH (MODULUS 2, REMAINDER 0)
+        FOR VALUES WITH (MODULUS 3, REMAINDER 0);
+
+    -- Local index on pg1's partition
+    CREATE INDEX IF NOT EXISTS users_p0_id_idx ON users_p0 (id);
+
+    -- Partition 1: Stored on remote Shard 1 (pg2)
+    CREATE FOREIGN TABLE IF NOT EXISTS users_p1
+        PARTITION OF users
+        FOR VALUES WITH (MODULUS 3, REMAINDER 1)
         SERVER shard1_server
         OPTIONS (table_name 'users_shard_1');
 
-    CREATE FOREIGN TABLE IF NOT EXISTS users_p1
+    -- Partition 2: Stored on remote Shard 2 (pg3)
+    CREATE FOREIGN TABLE IF NOT EXISTS users_p2
         PARTITION OF users
-        FOR VALUES WITH (MODULUS 2, REMAINDER 1)
+        FOR VALUES WITH (MODULUS 3, REMAINDER 2)
         SERVER shard2_server
         OPTIONS (table_name 'users_shard_2');
 SQL
