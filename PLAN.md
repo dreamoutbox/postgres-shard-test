@@ -156,11 +156,11 @@ CREATE FOREIGN TABLE users_p1
 ### Phase 3: Sharding Verification Suite
 - Goal: Build an automated test script (`scripts/test-sharding.sh`) verifying transparent routing, partition isolation, partition pruning, and pushdown.
 - Tasks:
-  - [ ] Test 1: Direct multi-row batch insert into `users` on coordinator (`pg1`).
-  - [ ] Test 2: Verify rows physically landed on `pg2` (`users_shard_1`) and `pg3` (`users_shard_2`) based on hash remainder.
-  - [ ] Test 3: Confirm coordinator query returns aggregated view of all rows (`SELECT count(*) FROM users`).
-  - [ ] Test 4: Run `EXPLAIN` on key lookup query (`WHERE id = X`) to assert partition pruning eliminated the non-target shard.
-  - [ ] Test 5: Verify update and delete propagation across shards.
+  - [x] Test 1: Direct multi-row batch insert into `users` on coordinator (`pg1`).
+  - [x] Test 2: Verify rows physically landed on `pg2` (`users_shard_1`) and `pg3` (`users_shard_2`) based on hash remainder.
+  - [x] Test 3: Confirm coordinator query returns aggregated view of all rows (`SELECT count(*) FROM users`).
+  - [x] Test 4: Run `EXPLAIN` on key lookup query (`WHERE id = X`) to assert partition pruning eliminated the non-target shard.
+  - [x] Test 5: Verify update and delete propagation across shards.
 - Done when: `./scripts/test-sharding.sh` passes 100% of checks on a freshly booted cluster.
 
 ### Phase 4: Developer Documentation & Inspection Tooling
