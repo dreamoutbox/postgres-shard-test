@@ -53,15 +53,15 @@ A comprehensive plan to transform the cluster into a **3-Way Hybrid Sharding Arc
 ### Phase 2: Update Automated Sharding Test Suite for 3-Way Hybrid Routing
 - Goal: Adapt `scripts/test-sharding.sh` to verify 3-way data placement across local storage and remote shards.
 - Tasks:
-  - [ ] Update catalog checks to assert 1 local partition and 2 foreign partitions.
-  - [ ] Update batch insert test to insert enough rows (e.g. 12 rows) to populate all 3 partitions.
-  - [ ] Add assertions checking:
+  - [x] Update catalog checks to assert 1 local partition and 2 foreign partitions.
+  - [x] Update batch insert test to insert enough rows (e.g. 12 rows) to populate all 3 partitions.
+  - [x] Add assertions checking:
     - `pg1` local table `users_p0` contains rows (> 0).
     - `pg2` remote table `users_shard_1` contains rows (> 0).
     - `pg3` remote table `users_shard_2` contains rows (> 0).
     - Sum of all 3 partitions equals total inserted rows.
-  - [ ] Update partition pruning tests to verify `EXPLAIN` isolates `users_p0` (local scan), `users_p1` (foreign scan), and `users_p2` (foreign scan).
-  - [ ] Update UPDATE and DELETE assertions to cover local partition modifications.
+  - [x] Update partition pruning tests to verify `EXPLAIN` isolates `users_p0` (local scan), `users_p1` (foreign scan), and `users_p2` (foreign scan).
+  - [x] Update UPDATE and DELETE assertions to cover local partition modifications.
 - Done when: `./scripts/test-sharding.sh` passes 100% of checks on a freshly booted hybrid cluster.
 
 ### Phase 3: Update Tooling and Documentation (seed.sh, inspect.sh, README.md)
