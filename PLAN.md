@@ -166,11 +166,11 @@ CREATE FOREIGN TABLE users_p1
 ### Phase 4: Developer Documentation & Inspection Tooling
 - Goal: Provide an inspection script and clear documentation for developers to query and observe shard distributions.
 - Tasks:
-  - [ ] Implement `scripts/inspect.sh` to output:
+  - [x] Implement `scripts/inspect.sh` to output:
     - Node status and active connections.
     - Row count and table sizes per individual shard.
     - Sample rows and distribution percentages across shards.
-  - [ ] Update `README.md` with sharding tutorial, architectural diagrams, quickstart commands, and query examples.
+  - [x] Update `README.md` with sharding tutorial, architectural diagrams, quickstart commands, and query examples.
 - Done when: Running `./scripts/inspect.sh` provides an immediate visual summary of shard distribution.
 
 ---
