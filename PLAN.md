@@ -135,10 +135,10 @@ CREATE FOREIGN TABLE users_p1
 ### Phase 1: Reconfigure Topology for Independent Shards
 - Goal: Convert nodes `pg2` and `pg3` from read-only streaming replicas into independent, standalone writable PostgreSQL instances in docker-compose.
 - Tasks:
-  - [ ] Update `docker-compose.yml` to remove standby entrypoints and `depends_on` replication locks for `pg2` and `pg3`.
-  - [ ] Update `config/pg2/postgresql.conf` and `config/pg3/postgresql.conf` to standalone primary configurations (`hot_standby` removed, independent instances).
-  - [ ] Ensure scripts `scripts/init-pg2.sh` and `scripts/init-pg3.sh` initialize standard application schemas and permissions on shard first boot.
-  - [ ] Verify all 3 nodes (`pg1`, `pg2`, `pg3`) boot independently and accept writes.
+  - [x] Update `docker-compose.yml` to remove standby entrypoints and `depends_on` replication locks for `pg2` and `pg3`.
+  - [x] Update `config/pg2/postgresql.conf` and `config/pg3/postgresql.conf` to standalone primary configurations (`hot_standby` removed, independent instances).
+  - [x] Ensure scripts `scripts/init-pg2.sh` and `scripts/init-pg3.sh` initialize standard application schemas and permissions on shard first boot.
+  - [x] Verify all 3 nodes (`pg1`, `pg2`, `pg3`) boot independently and accept writes.
 - Done when: `./scripts/stop.sh && ./scripts/start.sh` boots 3 independent writable nodes; `SELECT pg_is_in_recovery()` returns `f` on all 3 nodes.
 
 ### Phase 2: Shard Schema & Foreign Data Wrapper Integration
