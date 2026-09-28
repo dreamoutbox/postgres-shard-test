@@ -37,11 +37,13 @@ echo "Inserted $COUNT row(s) successfully."
 echo ""
 
 # Quick shard distribution summary
+p0_count=$(docker exec pg1 psql -U "$PGUSER" -d "$APP_DB" -tAq -c "SELECT count(*) FROM users_p0;" 2>/dev/null || echo "0")
 s1_count=$(docker exec pg2 psql -U "$PGUSER" -d "$APP_DB" -tAq -c "SELECT count(*) FROM users_shard_1;" 2>/dev/null || echo "0")
 s2_count=$(docker exec pg3 psql -U "$PGUSER" -d "$APP_DB" -tAq -c "SELECT count(*) FROM users_shard_2;" 2>/dev/null || echo "0")
-total=$((s1_count + s2_count))
+total=$((p0_count + s1_count + s2_count))
 
-echo "Current Distribution:"
-echo "  Shard 1 (pg2): $s1_count rows"
-echo "  Shard 2 (pg3): $s2_count rows"
-echo "  Total:         $total rows across cluster"
+echo "Current Distribution (3-Way Hybrid):"
+echo "  Local Shard 0 (pg1 users_p0):       $p0_count rows"
+echo "  Remote Shard 1 (pg2 users_shard_1): $s1_count rows"
+echo "  Remote Shard 2 (pg3 users_shard_2): $s2_count rows"
+echo "  Total:                              $total rows across cluster"

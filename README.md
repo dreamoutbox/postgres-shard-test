@@ -1,10 +1,10 @@
-# PostgreSQL 18 — Horizontal Sharding Cluster (Docker Compose)
+# PostgreSQL 18 — 3-Way Hybrid Sharding Cluster (Docker Compose)
 
-Native horizontal sharding across three PostgreSQL 18 nodes using **Declarative Table Partitioning** and **Foreign Data Wrappers (`postgres_fdw`)**.
+Native horizontal sharding across three PostgreSQL 18 nodes using **Declarative Table Partitioning** and **Foreign Data Wrappers (`postgres_fdw`)** in a **3-Way Hybrid Architecture** (where every node stores a third of the dataset).
 
 ---
 
-## 1. Architecture Overview
+## 1. Architecture Overview (Hybrid Model)
 
 ```
                     +-----------------------------+
@@ -12,37 +12,37 @@ Native horizontal sharding across three PostgreSQL 18 nodes using **Declarative 
                     +--------------+--------------+
                                    |
                                    v  (Port 5432)
-                    +-----------------------------+
-                    |    Coordinator (pg1)        |
-                    |  - users (Partitioned Root) |
-                    |  - postgres_fdw extension   |
-                    +--------------+--------------+
-                                   |
-                +------------------+------------------+
-                |                                     |
-   (FDW Remoting: modulus 2 = 0)         (FDW Remoting: modulus 2 = 1)
-                |                                     |
-                v                                     v
-  +---------------------------+         +---------------------------+
-  |    Shard 1 (pg2, 5433)    |         |    Shard 2 (pg3, 5434)    |
-  |  - users_shard_1 (Table)  |         |  - users_shard_2 (Table)  |
-  +---------------------------+         +---------------------------+
+                    +---------------------------------------------+
+                    |           Coordinator Node (pg1)            |
+                    |  - users (Partitioned Root, HASH id)        |
+                    |  - users_p0 (LOCAL Table on pg1 disk)       |
+                    |  - postgres_fdw foreign servers to pg2, pg3 |
+                    +--------------+--------------+---------------+
+                                   |              |
+             (modulus 3 = 1)       |              |   (modulus 3 = 2)
+            +----------------------+              +----------------------+
+            |                                                            |
+            v                                                            v
+  +---------------------------+                        +---------------------------+
+  |    Shard 1 (pg2, 5433)    |                        |    Shard 2 (pg3, 5434)    |
+  |  - users_shard_1 (Table)  |                        |  - users_shard_2 (Table)  |
+  +---------------------------+                        +---------------------------+
 ```
 
 ### Node Roles
 
-| Container | Role | Port | Description |
-|-----------|------|------|-------------|
-| `pg1` | **Coordinator** | `5432` | Entry point for client queries. Holds the partitioned table definition and foreign server links. Holds **0 rows locally**. |
-| `pg2` | **Data Shard 1** | `5433` | Standalone PostgreSQL instance holding physical partition `users_shard_1` (`hash % 2 = 0`). |
-| `pg3` | **Data Shard 2** | `5434` | Standalone PostgreSQL instance holding physical partition `users_shard_2` (`hash % 2 = 1`). |
+| Container | Role | Port | Storage Type | Partition Key Route |
+|-----------|------|------|--------------|---------------------|
+| `pg1` | **Coordinator & Shard 0** | `5432` | **Local Disk Table** (`users_p0`) | `hash(id) % 3 = 0` |
+| `pg2` | **Data Shard 1** | `5433` | **Remote Foreign Table** (`users_shard_1`) | `hash(id) % 3 = 1` |
+| `pg3` | **Data Shard 2** | `5434` | **Remote Foreign Table** (`users_shard_2`) | `hash(id) % 3 = 2` |
 
 ---
 
-## 2. How PostgreSQL Native Sharding Works
+## 2. How Hybrid Sharding Works
 
-### Step 1: Physical Tables on Remote Shards
-Each data shard is an autonomous database hosting its designated partition table:
+### Step 1: Remote Shard Physical Tables
+`pg2` and `pg3` host their respective physical partition tables:
 ```sql
 -- On pg2 (Shard 1):
 CREATE TABLE users_shard_1 (
@@ -63,8 +63,8 @@ CREATE TABLE users_shard_2 (
 );
 ```
 
-### Step 2: Foreign Data Wrapper on Coordinator
-The coordinator uses `postgres_fdw` to communicate with the shard containers:
+### Step 2: Foreign Data Wrapper on Coordinator (`pg1`)
+The coordinator uses `postgres_fdw` to communicate with the remote shard containers:
 ```sql
 -- On pg1 (Coordinator):
 CREATE EXTENSION IF NOT EXISTS postgres_fdw;
@@ -82,11 +82,10 @@ CREATE USER MAPPING FOR postgres SERVER shard2_server
     OPTIONS (user 'postgres', password 'postgres');
 ```
 
-### Step 3: Declarative Partitioning Attached to Foreign Tables
-On `pg1`, we define a root partitioned table and attach foreign tables as partitions:
+### Step 3: Hybrid Partitioning (1 Local Partition + 2 Foreign Partitions)
+On `pg1`, we define a root partitioned table using `MODULUS 3`. Partition 0 is created as a **local table on `pg1`**, while partitions 1 and 2 are attached as **foreign tables**:
 ```sql
--- Root partitioned table on Coordinator (stores no data locally)
--- Note: Foreign partitions cannot have UNIQUE/PRIMARY KEY constraints on the root table.
+-- Root partitioned table on Coordinator
 CREATE TABLE users (
     id BIGINT NOT NULL,
     username TEXT NOT NULL,
@@ -94,31 +93,37 @@ CREATE TABLE users (
     created_at TIMESTAMPTZ DEFAULT now()
 ) PARTITION BY HASH (id);
 
--- Partition 0 mapped to Shard 1
-CREATE FOREIGN TABLE users_p0
+-- 1. LOCAL partition stored on pg1's disk:
+CREATE TABLE users_p0
     PARTITION OF users
-    FOR VALUES WITH (MODULUS 2, REMAINDER 0)
+    FOR VALUES WITH (MODULUS 3, REMAINDER 0);
+
+CREATE INDEX users_p0_id_idx ON users_p0 (id);
+
+-- 2. REMOTE partition on pg2 (Shard 1):
+CREATE FOREIGN TABLE users_p1
+    PARTITION OF users
+    FOR VALUES WITH (MODULUS 3, REMAINDER 1)
     SERVER shard1_server
     OPTIONS (table_name 'users_shard_1');
 
--- Partition 1 mapped to Shard 2
-CREATE FOREIGN TABLE users_p1
+-- 3. REMOTE partition on pg3 (Shard 2):
+CREATE FOREIGN TABLE users_p2
     PARTITION OF users
-    FOR VALUES WITH (MODULUS 2, REMAINDER 1)
+    FOR VALUES WITH (MODULUS 3, REMAINDER 2)
     SERVER shard2_server
     OPTIONS (table_name 'users_shard_2');
 ```
 
-### Step 4: Transparent Query Execution & Partition Pruning
-- **Inserts**: An insert into `users` on the coordinator hashes `id` and forwards the row over network to either `pg2` or `pg3`.
-- **Partition Pruning**: Querying `WHERE id = 1` evaluates the hash remainder; Postgres automatically skips communicating with non-target shards:
-  ```sql
-  EXPLAIN (COSTS OFF) SELECT * FROM users WHERE id = 1;
-  -- Output:
-  -- Foreign Scan on users_p0 users
-  -- (users_p1 is pruned!)
-  ```
-- **Aggregate Pushdown**: Queries like `count(*)` or `sum()` are pushed down to shard nodes to compute in parallel.
+### Step 4: Transparent Routing & Query Planning
+- **Inserts**: Inserting through `pg1` calculates `hash(id) % 3`. If remainder is `0`, it writes to `pg1`'s local table. If `1` or `2`, it forwards the row across the network to `pg2` or `pg3`.
+- **Partition Pruning**:
+  - `WHERE id = 2` (remainder 0) -> Scans local index on `users_p0` and **prunes both remote shards**:
+    ```
+    Bitmap Heap Scan on users_p0 users
+      -> Bitmap Index Scan on users_p0_id_idx
+    ```
+  - `WHERE id = 3` (remainder 1) -> Emits `Foreign Scan on users_p1` to `pg2` and **prunes `pg1` and `pg3`**.
 
 ---
 
@@ -127,20 +132,20 @@ CREATE FOREIGN TABLE users_p1
 ```
 .
 ├── config/
-│   ├── pg1/               # Coordinator config (max_prepared_transactions for 2PC)
+│   ├── pg1/               # Coordinator & Shard 0 config
 │   ├── pg2/               # Shard 1 config
 │   └── pg3/               # Shard 2 config
 ├── scripts/
-│   ├── init-pg1.sh        # Sets up postgres_fdw, foreign servers, and foreign partitions
+│   ├── init-pg1.sh        # Configures postgres_fdw, local partition users_p0, and foreign partitions
 │   ├── init-pg2.sh        # Creates users_shard_1 table on Shard 1
 │   ├── init-pg3.sh        # Creates users_shard_2 table on Shard 2
 │   ├── start.sh           # Starts the cluster (pg2/pg3 healthy -> pg1 coordinator)
 │   ├── stop.sh            # Stops cluster and wipes containers + volumes
-│   ├── seed.sh            # Inserts sample rows through coordinator
-│   ├── test-sharding.sh   # 13-check automated sharding test suite
+│   ├── seed.sh            # Inserts sample rows with 3-way distribution summary
+│   ├── test-sharding.sh   # 17-check automated hybrid sharding test suite
 │   └── inspect.sh         # Real-time cluster inspection tool
 ├── docker-compose.yml
-├── PLAN.md                # Implementation plan & tutorial
+├── PLAN-hybrid.md         # Hybrid implementation plan
 └── .env                   # Credentials (git-ignored)
 ```
 
@@ -157,10 +162,18 @@ CREATE FOREIGN TABLE users_p1
 ### 2. Seed sample data
 
 ```bash
-./scripts/seed.sh 10
+# Seed 15 rows (evenly distributed across pg1, pg2, pg3)
+./scripts/seed.sh 15
 ```
 
-Inserts 10 rows through the coordinator. You can run it multiple times with any desired row count (e.g. `./scripts/seed.sh 100`).
+Output:
+```
+Current Distribution (3-Way Hybrid):
+  Local Shard 0 (pg1 users_p0):       5 rows
+  Remote Shard 1 (pg2 users_shard_1): 5 rows
+  Remote Shard 2 (pg3 users_shard_2): 5 rows
+  Total:                              15 rows across cluster
+```
 
 ### 3. Run the automated verification suite
 
@@ -168,53 +181,28 @@ Inserts 10 rows through the coordinator. You can run it multiple times with any 
 ./scripts/test-sharding.sh
 ```
 
-Tests:
-1. Node connectivity across coordinator and both shards.
-2. Foreign server and foreign partition catalog checks.
-3. Distributed batch insert on coordinator.
-4. Physical shard distribution validation (rows land across `users_shard_1` and `users_shard_2`).
+Verifies:
+1. Node connectivity across all 3 nodes.
+2. Catalog checks: 1 local partition + 2 foreign partitions.
+3. Distributed batch inserts across local and remote shards.
+4. Physical row placement across all 3 nodes.
 5. Unified aggregation queries (`SELECT count(*) FROM users`).
-6. Query planner partition pruning (`EXPLAIN` key lookup prunes non-target shard).
-7. Distributed `UPDATE` propagation.
-8. Distributed `DELETE` propagation.
+6. Query planner partition pruning (local scans vs foreign scans).
+7. Distributed `UPDATE` propagation (local and remote).
+8. Distributed `DELETE` propagation (local and remote).
 
-### 3. Inspect the cluster
+### 4. Inspect the cluster
 
 ```bash
 ./scripts/inspect.sh
 ```
 
-Shows cluster topology, foreign partition bindings, row count and disk size per shard, and sample data.
-
-### 4. Interactive queries
-
-Connect to the coordinator (`pg1`):
-```bash
-docker exec -it pg1 psql -U postgres -d appdb
-```
-
-Insert rows and observe transparent routing:
-```sql
-INSERT INTO users (id, username, email) VALUES
-    (1, 'alice', 'alice@example.com'),
-    (2, 'bob', 'bob@example.com'),
-    (3, 'carol', 'carol@example.com');
-
--- Unified view from Coordinator:
-SELECT * FROM users;
-
--- Observe partition pruning:
-EXPLAIN SELECT * FROM users WHERE id = 1;
-```
-
-Verify rows on the physical shards directly:
-```bash
-# Shard 1:
-docker exec -it pg2 psql -U postgres -d appdb -c "SELECT * FROM users_shard_1;"
-
-# Shard 2:
-docker exec -it pg3 psql -U postgres -d appdb -c "SELECT * FROM users_shard_2;"
-```
+Displays:
+- Full cluster topology.
+- Storage type per partition (`LOCAL TABLE` on `pg1` vs `FOREIGN TABLE` on `pg2`/`pg3`).
+- Row counts and disk size for each physical partition.
+- Sample records previewed directly from each respective node.
+- Real-time `EXPLAIN` query plans demonstrating local and remote partition pruning.
 
 ### 5. Tear down
 

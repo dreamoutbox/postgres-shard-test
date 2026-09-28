@@ -67,15 +67,15 @@ A comprehensive plan to transform the cluster into a **3-Way Hybrid Sharding Arc
 ### Phase 3: Update Tooling and Documentation (seed.sh, inspect.sh, README.md)
 - Goal: Align developer inspection scripts and documentation with the 3-way hybrid distribution.
 - Tasks:
-  - [ ] Update `scripts/seed.sh` summary output to report row counts for:
+  - [x] Update `scripts/seed.sh` summary output to report row counts for:
     - `pg1 (local partition)`
     - `pg2 (shard 1)`
     - `pg3 (shard 2)`
-  - [ ] Update `scripts/inspect.sh` to display:
+  - [x] Update `scripts/inspect.sh` to display:
     - Local storage stats on `pg1` (`users_p0` size and rows).
     - Remote storage stats on `pg2` and `pg3`.
     - Sample data preview from `users_p0` on `pg1`.
-  - [ ] Update `README.md` architectural diagrams, partition definitions, and query walkthroughs to document the hybrid model.
+  - [x] Update `README.md` architectural diagrams, partition definitions, and query walkthroughs to document the hybrid model.
 - Done when: Running `./scripts/seed.sh 15 && ./scripts/inspect.sh` displays rows distributed across `pg1`, `pg2`, and `pg3` with accurate size breakdowns.
 
 ---
